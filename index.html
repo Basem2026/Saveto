@@ -2,156 +2,231 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<title>نظام المخزون الكامل</title>
+<title>نظام المخزون – الموارد البشرية</title>
 <style>
-body { font-family: sans-serif; background:#f3f3f3; }
-.card { background:white; padding:20px; border-radius:10px; box-shadow:0 0 10px #ddd; max-width:900px; margin:20px auto;}
-input,select,button { padding:10px; margin:5px 0; font-size:16px; width:100%;}
-button { background:#2196f3; color:white; border:none; border-radius:6px; cursor:pointer;}
-button:hover{background:#1769aa;}
-table{width:100%; border-collapse:collapse;}
-th,td{border:1px solid #ccc; padding:8px; text-align:center;}
+body { font-family: "Cairo", sans-serif; background:#eef2f7; margin:0; padding:0;}
+.container{max-width:1100px; margin:auto; padding:20px;}
+.card{background:white; border-radius:10px; padding:20px; margin:20px 0; box-shadow:0 5px 20px rgba(0,0,0,0.1);}
+input,select,button{padding:12px; margin:6px 0; width:100%; border-radius:8px; border:1px solid #ccc; font-size:16px;}
+button{background:#007bff; color:white; border:none; cursor:pointer;}
+button:hover{background:#0056c7;}
+table{width:100%; border-collapse:collapse; margin-top:10px;}
+th,td{padding:10px; border:1px solid #ddd; text-align:center;}
 .success{color:green; font-weight:bold;}
 .error{color:red; font-weight:bold;}
-.alert{color:red;font-weight:bold;}
+.alert{color:#d40000; font-weight:bold;}
+.header{background:#0d6efd; padding:20px; color:white; text-align:center; font-size:24px; font-weight:bold;}
+.hide{display:none;}
 </style>
 </head>
 <body>
 
-<div class="card" id="loginDiv">
+<div class="header">نظام إدارة مخزون المواد – الموارد البشرية</div>
+
+<div class="container">
+
+<!-- LOGIN -->
+<div class="card" id="loginBox">
 <h2>تسجيل الدخول</h2>
 <input id="username" placeholder="اسم المستخدم">
-<input id="password" placeholder="كلمة المرور" type="password">
+<input id="password" type="password" placeholder="كلمة المرور">
 <button onclick="login()">دخول</button>
-<p id="loginResult"></p>
+<p id="loginMsg"></p>
 </div>
 
-<div id="dashboardDiv" style="display:none;">
-<h2>لوحة التحكم</h2>
-<p>مرحبًا <span id="roleName"></span></p>
+<!-- DASHBOARD -->
+<div id="app" class="hide">
+
+<h2>مرحباً <span id="loggedUser"></span></h2>
 
 <div class="card">
-<h3>المخزون الحالي</h3>
+<h3>📦 المخزون الحالي</h3>
 <table id="inventoryTable">
-<tr><th>الصنف</th><th>الفئة</th><th>الكمية</th><th>تنبيه</th></tr>
+<tr>
+<th>الصنف</th>
+<th>الفئة</th>
+<th>الكمية</th>
+<th>حد التنبيه</th>
+<th>حالة المخزون</th>
+</tr>
 </table>
 </div>
 
 <div class="card">
-<h3>إضافة طلب/صرف</h3>
-<label>الصنف</label><input id="item" placeholder="مثال: سكر – شاي – مسحوق تنظيف">
-<label>الكمية</label><input type="number" id="qty">
-<label>الفئة (لصنف جديد)</label><input id="category" placeholder="مثال: بوفيه – مشروبات – مواد تنظيف">
-<label>حد التنبيه (لصنف جديد)</label><input id="low_alert" type="number" placeholder="مثال: 5">
-<label>الموافق</label>
+<h3>➕ إضافة طلب / صرف</h3>
+
+<label>اسم الصنف</label>
+<input id="item">
+
+<label>الكمية</label>
+<input id="qty" type="number">
+
+<label>فئة الصنف (عند إضافة صنف جديد)</label>
+<input id="category" placeholder="مثال: بوفيه / تنظيف / مشروبات">
+
+<label>حد التنبيه (للصنف الجديد)</label>
+<input id="low_alert" type="number" placeholder="مثال: 5">
+
+<label>الموافقة المطلوبة من</label>
 <select id="approver">
-<option>HR</option><option>Store</option>
+<option value="HR">HR</option>
+<option value="Store">أمين مخزن</option>
 </select>
-<button onclick="createRequest()">إرسال الطلب</button>
-<p id="resultReq"></p>
+
+<button onclick="sendRequest()">إرسال الطلب</button>
+<p id="reqMsg"></p>
 </div>
 
 <div class="card">
-<h3>الموافقة على الطلبات</h3>
+<h3>✔️ الطلبات المعلقة للموافقة</h3>
 <table id="requestsTable">
-<tr><th>ID</th><th>الصنف</th><th>الكمية</th><th>المرسل</th><th>الموافق</th><th>إجراء</th></tr>
+<tr>
+<th>ID</th>
+<th>الصنف</th>
+<th>الكمية</th>
+<th>المرسل</th>
+<th>الموافقة من</th>
+<th>إجراء</th>
+</tr>
 </table>
 </div>
+
+</div>
+
 </div>
 
 <script>
-const API = "PUT-YOUR-APPSCRIPT-URL-HERE"; // ضع هنا رابط Google Apps Script
-let currentRole = "";
+// 🌐 رابط Google Apps Script
+const API = "PUT-YOUR-APPSCRIPT-URL-HERE";
 
-// تسجيل دخول
-async function login(){
-  const username = document.getElementById("username").value;
-  const password = document.getElementById("password").value;
-  const res = await fetch(API,{method:"POST", body:JSON.stringify({action:"login", username,password})});
-  const data = await res.json();
-  if(data.success){
-    document.getElementById("loginDiv").style.display="none";
-    document.getElementById("dashboardDiv").style.display="block";
-    document.getElementById("roleName").innerText = data.role;
-    currentRole = data.role;
-    loadInventory();
-    loadRequests();
-  }else{
-    document.getElementById("loginResult").innerHTML="<span class='error'>اسم المستخدم أو كلمة المرور خاطئة</span>";
+// 🔐 المستخدمين الافتراضيين
+const localUsers = [
+ {username:"basem", password:"123", role:"Manager"},
+ {username:"hr", password:"123", role:"HR"},
+ {username:"store", password:"123", role:"Store"},
+];
+
+let CURRENT_USER = "";
+
+// ====== LOGIN SYSTEM ======
+function login(){
+  let u = document.getElementById("username").value;
+  let p = document.getElementById("password").value;
+  let msg = document.getElementById("loginMsg");
+
+  let found = localUsers.find(x=>x.username===u && x.password===p);
+  if(!found){
+    msg.innerHTML="<span class='error'>❌ بيانات الدخول غير صحيحة</span>";
+    return;
   }
+
+  CURRENT_USER = found.role;
+  document.getElementById("loggedUser").innerText = found.username + " ("+found.role+")";
+
+  document.getElementById("loginBox").classList.add("hide");
+  document.getElementById("app").classList.remove("hide");
+
+  loadInventory();
+  loadRequests();
 }
 
-// تحميل المخزون الحالي مع تنبيهات
+// ===== LOAD INVENTORY =====
 async function loadInventory(){
   const res = await fetch(API,{method:"POST", body:JSON.stringify({action:"get_inventory"})});
   const data = await res.json();
-  if(data.success){
-    const table = document.getElementById("inventoryTable");
-    table.innerHTML="<tr><th>الصنف</th><th>الفئة</th><th>الكمية</th><th>تنبيه</th></tr>";
-    data.inventory.forEach(row=>{
-      let alert = (row[2]<=row[3])? "<span class='alert'>نقص</span>":"";
-      table.innerHTML+="<tr><td>"+row[0]+"</td><td>"+row[1]+"</td><td>"+row[2]+"</td><td>"+alert+"</td></tr>";
-    });
-  }
+
+  let tb = document.getElementById("inventoryTable");
+  tb.innerHTML = `
+  <tr><th>الصنف</th><th>الفئة</th><th>الكمية</th><th>حد التنبيه</th><th>الحالة</th></tr>
+  `;
+
+  data.inventory.forEach(r=>{
+    let warn = (Number(r[2]) <= Number(r[3])) ? "<span class='alert'>⚠️ ناقص</span>" : "✔️ جيد";
+    tb.innerHTML += `
+    <tr>
+      <td>${r[0]}</td>
+      <td>${r[1]}</td>
+      <td>${r[2]}</td>
+      <td>${r[3]}</td>
+      <td>${warn}</td>
+    </tr>
+    `;
+  });
 }
 
-// إنشاء طلب جديد
-async function createRequest(){
-  const item = document.getElementById("item").value;
-  const qty = parseInt(document.getElementById("qty").value);
-  const approver = document.getElementById("approver").value;
-  const category = document.getElementById("category").value || "عام";
-  const low_alert = parseInt(document.getElementById("low_alert").value) || 5;
+// ===== SEND REQUEST =====
+async function sendRequest(){
+  let item = document.getElementById("item").value;
+  let qty = Number(document.getElementById("qty").value);
+  let cat = document.getElementById("category").value || "غير مصنف";
+  let low = Number(document.getElementById("low_alert").value) || 5;
+  let approver = document.getElementById("approver").value;
 
-  if(!item || !qty){ document.getElementById("resultReq").innerHTML="<span class='error'>اكمل البيانات</span>"; return;}
+  if(!item || !qty){
+    document.getElementById("reqMsg").innerHTML="<span class='error'>❌ اكمل البيانات</span>";
+    return;
+  }
 
   const res = await fetch(API,{
     method:"POST",
     body:JSON.stringify({
       action:"create_request",
-      item,
-      quantity: qty,
-      sender: currentRole,
-      approver,
-      category,
-      low_alert
+      item:item,
+      qty:qty,
+      sender:CURRENT_USER,
+      approver:approver,
+      category:cat,
+      low_alert:low
     })
   });
 
   const data = await res.json();
   if(data.success){
-    document.getElementById("resultReq").innerHTML="<span class='success'>تم إرسال الطلب</span>";
+    document.getElementById("reqMsg").innerHTML="<span class='success'>✔️ تم إرسال الطلب</span>";
     loadRequests();
   }
 }
 
-// تحميل الطلبات المعلقة
+// ===== LOAD REQUESTS =====
 async function loadRequests(){
-  const res = await fetch(API,{method:"POST",body:JSON.stringify({action:"get_requests"})});
+  const res = await fetch(API,{method:"POST", body:JSON.stringify({action:"get_requests"})});
   const data = await res.json();
-  const table = document.getElementById("requestsTable");
-  table.innerHTML="<tr><th>ID</th><th>الصنف</th><th>الكمية</th><th>المرسل</th><th>الموافق</th><th>إجراء</th></tr>";
-  if(data.success){
-    data.requests.forEach(row=>{
-      let btn = "";
-      if(row[5]===currentRole){
-        btn = "<button onclick='approve("+row[0]+")'>موافقة</button>";
-      }
-      table.innerHTML+="<tr><td>"+row[0]+"</td><td>"+row[1]+"</td><td>"+row[2]+"</td><td>"+row[3]+"</td><td>"+row[5]+"</td><td>"+btn+"</td></tr>";
-    });
-  }
+
+  let tb = document.getElementById("requestsTable");
+  tb.innerHTML = `
+  <tr>
+  <th>ID</th><th>الصنف</th><th>الكمية</th><th>المرسل</th><th>الموافقة من</th><th>إجراء</th>
+  </tr>`;
+
+  data.requests.forEach(r=>{
+    let BTN = "";
+    if(r[4] === CURRENT_USER){
+      BTN = `<button onclick="approve(${r[0]})">موافقة</button>`;
+    }
+
+    tb.innerHTML += `
+    <tr>
+      <td>${r[0]}</td>
+      <td>${r[1]}</td>
+      <td>${r[2]}</td>
+      <td>${r[3]}</td>
+      <td>${r[4]}</td>
+      <td>${BTN}</td>
+    </tr>`;
+  });
 }
 
-// الموافقة على الطلب وخصم تلقائي / إنشاء صف جديد إذا الصنف جديد
+// ===== APPROVE REQUEST =====
 async function approve(id){
-  const res = await fetch(API,{method:"POST", body:JSON.stringify({action:"approve", id, approved_by:currentRole})});
+  const res = await fetch(API,{
+    method:"POST",
+    body:JSON.stringify({action:"approve", id:id, approver:CURRENT_USER})
+  });
   const data = await res.json();
   if(data.success){
-    alert("تمت الموافقة والخصم التلقائي من المخزون");
+    alert("✔️ تمت الموافقة والخصم التلقائي");
     loadInventory();
     loadRequests();
-  }else{
-    alert("تعذر العثور على الطلب");
   }
 }
 </script>
